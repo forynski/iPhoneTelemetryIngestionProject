@@ -33,7 +33,7 @@ namespace iPhoneTelemetryIngestionProject
                         log.LogInformation(eventGridEvent.Data.ToString());
                         JObject eventGridDataJObject = (JObject)JsonConvert.DeserializeObject(eventGridEvent.Data.ToString());
                         string iotHubConnectionDeviceId = (string)eventGridDataJObject["systemProperties"]["iothub-connection-device-id"];
-                        if (iotHubConnectionDeviceId.Equals("URCobot"))
+                        if (iotHubConnectionDeviceId.Equals("iPhone509"))
                         {
                             JsonPatchDocument azureJsonPatchDocument = new JsonPatchDocument();
                             //azureJsonPatchDocument.AppendAdd("/x", Convert.ToDouble(eventGridDataJObject["body"]["speed_scaling"]));
