@@ -1,5 +1,3 @@
-// Default URL for triggering event grid function in the local environment.
-// http://localhost:7071/runtime/webhooks/EventGrid?functionName={functionname}
 using System;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.EventGrid;
@@ -17,8 +15,9 @@ namespace iPhoneTelemetryIngestionProject
     public static class EventGridTriggerIoTHubtoTwins
     {
         private static readonly string ADT_SERVICE_URL = Environment.GetEnvironmentVariable("ADT_SERVICE_URL");
+
         [FunctionName("EventGridTriggerIoTHubtoTwins")]
-        public static async Task Run([EventGridTrigger]EventGridEvent eventGridEvent, ILogger log)
+        public static async Task Run([EventGridTrigger] EventGridEvent eventGridEvent, ILogger log)
         {
             if (ADT_SERVICE_URL == null) log.LogError("Application setting 'ADT_SERVICE_URL' not set");
             else
@@ -33,18 +32,24 @@ namespace iPhoneTelemetryIngestionProject
                         log.LogInformation(eventGridEvent.Data.ToString());
                         JObject eventGridDataJObject = (JObject)JsonConvert.DeserializeObject(eventGridEvent.Data.ToString());
                         string iotHubConnectionDeviceId = (string)eventGridDataJObject["systemProperties"]["iothub-connection-device-id"];
+
                         if (iotHubConnectionDeviceId.Equals("iPhone509"))
                         {
+                            // Extract values from the payload string
+                            string payload = (string)eventGridDataJObject["body"];
+                            var accelerometerValues = ExtractAccelerometerValues(payload);
+
+                            // Create a JSON patch document with the extracted values
                             JsonPatchDocument azureJsonPatchDocument = new JsonPatchDocument();
                             //azureJsonPatchDocument.AppendAdd("/x", Convert.ToDouble(eventGridDataJObject["body"]["speed_scaling"]));
                             //azureJsonPatchDocument.AppendAdd("/y", Convert.ToDouble(eventGridDataJObject["body"]["actual_momentum"]));
                             //azureJsonPatchDocument.AppendAdd("/z", Convert.ToDouble(eventGridDataJObject["body"]["actual_main_voltage"]));
-                            azureJsonPatchDocument.AppendAdd("/x", GetRandomNumber(1,10));
-                            azureJsonPatchDocument.AppendAdd("/y", GetRandomNumber(11,20));
-                            azureJsonPatchDocument.AppendAdd("/z", GetRandomNumber(21,30));
+                            azureJsonPatchDocument.AppendAdd("/x", accelerometerValues.X);
+                            azureJsonPatchDocument.AppendAdd("/y", accelerometerValues.Y);
+                            azureJsonPatchDocument.AppendAdd("/z", accelerometerValues.Z);
 
+                            // Update the Digital Twin
                             await digitalTwinsClient.UpdateDigitalTwinAsync("iPhone509Twin", azureJsonPatchDocument);
-                            
                         }
                     }
                 }
@@ -53,10 +58,47 @@ namespace iPhoneTelemetryIngestionProject
                     log.LogError($"Error in ingest function: {ex.Message}");
                 }
         }
-        public static double GetRandomNumber(double minimum, double maximum)
+
+        // Helper function to extract accelerometer values from the payload string
+        private static AccelerometerValues ExtractAccelerometerValues(string payload)
         {
-            Random random = new Random();
-            return random.NextDouble() * (maximum - minimum) + minimum;
+            // Example payload: "X: -0.0283660888671875, Y: -0.905120849609375, Z: -0.4291839599609375"
+            var values = payload.Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+            if (values.Length == 3)
+            {
+                return new AccelerometerValues
+                {
+                    X = ParseValue(values[0]),
+                    Y = ParseValue(values[1]),
+                    Z = ParseValue(values[2])
+                };
+            }
+
+            // Return default values or handle the error as needed
+            return new AccelerometerValues();
+        }
+
+        // Helper function to parse accelerometer values from the payload string
+        private static double ParseValue(string valueString)
+        {
+            var parts = valueString.Split(':', StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length == 2 && double.TryParse(parts[1].Trim(), out double result))
+            {
+                return result;
+            }
+
+            // Return default value or handle the error as needed
+            return 0.0;
+        }
+
+        // Data structure to hold accelerometer values
+        private class AccelerometerValues
+        {
+            public double X { get; set; }
+            public double Y { get; set; }
+            public double Z { get; set; }
         }
     }
 }
