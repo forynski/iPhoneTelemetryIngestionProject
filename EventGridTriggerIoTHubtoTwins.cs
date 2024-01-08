@@ -20,48 +20,65 @@ namespace iPhoneTelemetryIngestionProject
         [FunctionName("EventGridTriggerIoTHubtoTwins")]
         public static async Task Run([EventGridTrigger] EventGridEvent eventGridEvent, ILogger log)
         {
-            if (ADT_SERVICE_URL == null) log.LogError("Application setting 'ADT_SERVICE_URL' not set");
-            else
-                try
+            if (ADT_SERVICE_URL == null)
+            {
+                log.LogError("Application setting 'ADT_SERVICE_URL' not set");
+                return;
+            }
+
+            try
+            {
+                DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
+                DigitalTwinsClient digitalTwinsClient = new DigitalTwinsClient(new Uri(ADT_SERVICE_URL), defaultAzureCredential);
+                log.LogInformation($"ADT service client connection created.");
+
+                if (eventGridEvent != null && eventGridEvent.Data != null)
                 {
-                    DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
-                    DigitalTwinsClient digitalTwinsClient = new DigitalTwinsClient(new Uri(ADT_SERVICE_URL), defaultAzureCredential);
-                    log.LogInformation($"ADT service client connection created.");
+                    log.LogInformation(eventGridEvent.Data.ToString());
+                    JObject eventGridDataJObject = (JObject)JsonConvert.DeserializeObject(eventGridEvent.Data.ToString());
+                    string iotHubConnectionDeviceId = (string)eventGridDataJObject["systemProperties"]["iothub-connection-device-id"];
 
-                    if (eventGridEvent != null && eventGridEvent.Data != null)
+                    if (iotHubConnectionDeviceId.Equals("iPhone509"))
                     {
-                        log.LogInformation(eventGridEvent.Data.ToString());
-                        JObject eventGridDataJObject = (JObject)JsonConvert.DeserializeObject(eventGridEvent.Data.ToString());
-                        string iotHubConnectionDeviceId = (string)eventGridDataJObject["systemProperties"]["iothub-connection-device-id"];
+                        // Base64 decode the payload string
+                        string base64EncodedPayload = (string)eventGridDataJObject["body"];
+                        string payload = Encoding.UTF8.GetString(Convert.FromBase64String(base64EncodedPayload));
 
-                        if (iotHubConnectionDeviceId.Equals("iPhone509"))
+                        // Extract values from the payload string
+                        var accelerometerValues = ExtractAccelerometerValues(payload);
+
+                        // Process accelerometer values
+                        try
                         {
-                            // Base64 decode the payload string
-                            string base64EncodedPayload = (string)eventGridDataJObject["body"];
-                            string payload = Encoding.UTF8.GetString(Convert.FromBase64String(base64EncodedPayload));
+                            if (accelerometerValues != null)
+                            {
+                                log.LogInformation($"Accelerometer values: X={accelerometerValues.X}, Y={accelerometerValues.Y}, Z={accelerometerValues.Z}");
 
-                            // Extract values from the payload string
-                            var accelerometerValues = ExtractAccelerometerValues(payload);
+                                // Create a JSON patch document with the extracted values
+                                JsonPatchDocument azureJsonPatchDocument = new JsonPatchDocument();
+                                azureJsonPatchDocument.AppendAdd("/x", accelerometerValues.X);
+                                azureJsonPatchDocument.AppendAdd("/y", accelerometerValues.Y);
+                                azureJsonPatchDocument.AppendAdd("/z", accelerometerValues.Z);
 
-                            // Create a JSON patch document with the extracted values
-                            JsonPatchDocument azureJsonPatchDocument = new JsonPatchDocument();
-                            //azureJsonPatchDocument.AppendAdd("/x", Convert.ToDouble(eventGridDataJObject["body"]["speed_scaling"]));
-                            //azureJsonPatchDocument.AppendAdd("/y", Convert.ToDouble(eventGridDataJObject["body"]["actual_momentum"]));
-                            //azureJsonPatchDocument.AppendAdd("/z", Convert.ToDouble(eventGridDataJObject["body"]["actual_main_voltage"]));
-                            azureJsonPatchDocument.AppendAdd("/x", accelerometerValues.X);
-                            azureJsonPatchDocument.AppendAdd("/y", accelerometerValues.Y);
-                            azureJsonPatchDocument.AppendAdd("/z", accelerometerValues.Z);
-
-                            // Update the Digital Twin
-                            await digitalTwinsClient.UpdateDigitalTwinAsync("iPhone509Twin", azureJsonPatchDocument);
-                            
+                                // Update the Digital Twin
+                                await digitalTwinsClient.UpdateDigitalTwinAsync("iPhone509Twin", azureJsonPatchDocument);
+                            }
+                            else
+                            {
+                                log.LogError("Accelerometer values are null. Check payload format.");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            log.LogError($"Error processing accelerometer values: {ex.Message}");
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    log.LogError($"Error in ingest function: {ex.Message}");
-                }
+            }
+            catch (Exception ex)
+            {
+                log.LogError($"Error in ingest function: {ex.Message}");
+            }
         }
 
         // Helper function to extract accelerometer values from the payload string
