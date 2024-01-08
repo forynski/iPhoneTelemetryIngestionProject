@@ -10,7 +10,6 @@ using Newtonsoft.Json;
 using Azure;
 using System.Text;
 using System.Threading.Tasks;
-using System.Net;
 
 namespace iPhoneTelemetryIngestionProject
 {
@@ -20,13 +19,6 @@ namespace iPhoneTelemetryIngestionProject
         public double X { get; set; }
         public double Y { get; set; }
         public double Z { get; set; }
-    }
-
-    // Define a class to represent your authentication method structure
-    public class YourAuthMethodClass
-    {
-        // Define properties based on the structure of your authentication method
-        // For example, if it has 'scope', 'type', 'issuer', etc.
     }
 
     public static class EventGridTriggerIoTHubtoTwins
@@ -62,12 +54,6 @@ namespace iPhoneTelemetryIngestionProject
 
                             // Deserialize the JSON payload
                             var accelerometerValues = JsonConvert.DeserializeObject<AccelerometerValues>(payload);
-
-                            // Decode the URL-encoded JSON string
-                            string authMethodJson = WebUtility.UrlDecode(eventGridDataJObject["systemProperties"]["iothub-connection-auth-method"].ToString());
-
-                            // Deserialize the auth method JSON
-                            var authMethod = JsonConvert.DeserializeObject<YourAuthMethodClass>(authMethodJson);
 
                             // Create a JSON patch document with the extracted values
                             JsonPatchDocument azureJsonPatchDocument = new JsonPatchDocument();
