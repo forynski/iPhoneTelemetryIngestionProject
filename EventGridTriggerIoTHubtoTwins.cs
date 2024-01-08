@@ -8,6 +8,7 @@ using Azure.DigitalTwins.Core;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using Azure;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace iPhoneTelemetryIngestionProject
@@ -35,8 +36,11 @@ namespace iPhoneTelemetryIngestionProject
 
                         if (iotHubConnectionDeviceId.Equals("iPhone509"))
                         {
+                            // Base64 decode the payload string
+                            string base64EncodedPayload = (string)eventGridDataJObject["body"];
+                            string payload = Encoding.UTF8.GetString(Convert.FromBase64String(base64EncodedPayload));
+
                             // Extract values from the payload string
-                            string payload = (string)eventGridDataJObject["body"];
                             var accelerometerValues = ExtractAccelerometerValues(payload);
 
                             // Create a JSON patch document with the extracted values
